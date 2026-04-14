@@ -1,0 +1,11 @@
+.DS_Store
+*.swp
+*.swo
+*~
+
+# Internal / bhOS-specific files (not for public repo)
+CLAUDE.md
+SESSION-LOG.md
+TODO.md
+docs/superpowers/
+gstack-garryTan/
