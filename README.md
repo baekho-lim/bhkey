@@ -16,7 +16,7 @@ It targets only your external keyboard (matched by VendorID+ProductID), so your 
 ## Installation
 
 ```bash
-git clone https://github.com/your-username/bhkey.git
+git clone https://github.com/baekho-lim/bhkey.git
 cd bhkey
 chmod +x bhkey.sh
 bash bhkey.sh apply
