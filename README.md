@@ -2,6 +2,8 @@
 
 Zero-Latency Keyboard Remapper for macOS External Keyboards
 
+**Language**: English | [한국어](README.ko.md) | [中文](README.zh.md)
+
 ## Description
 
 bhkey remaps modifier keys on external keyboards using Apple's native `hidutil` kernel property API — no virtual driver, no background daemon eating CPU. Mapping is applied at the kernel level with zero input latency. Unlike Karabiner-Elements, bhkey installs nothing into the system; all files live inside your home directory.
