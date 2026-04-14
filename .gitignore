@@ -9,3 +9,6 @@ SESSION-LOG.md
 TODO.md
 docs/superpowers/
 gstack-garryTan/
+
+# Tool cache / local artifacts
+.playwright-mcp/
