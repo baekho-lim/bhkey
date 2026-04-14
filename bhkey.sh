@@ -1,5 +1,5 @@
 #!/bin/bash
-# bhkey v1.0: Zero-Latency Keyboard Remapper for macOS External Keyboards
+# bhkey v1.0.1: Zero-Latency Keyboard Remapper for macOS External Keyboards
 #
 # Anti-Thesis Guards:
 #   1. Detect macOS modifier key defaults conflicts
@@ -7,12 +7,13 @@
 #   3. Protect Magic Keyboard / Built-In keyboard
 #   4. Handle hidutil execution failure
 #   5. Handle LaunchAgent plist creation/load errors
+#   6. Verify mapping applied after hidutil --set (silent fail guard, macOS 14.2+)
 
 set -eu
 
 PLIST_NAME="com.bh.keymapping"
 PLIST_PATH="$HOME/Library/LaunchAgents/$PLIST_NAME.plist"
-BHKEY_VERSION="1.0.0"
+BHKEY_VERSION="1.0.1"
 NO_PROMPT=false
 
 # --- Colors ---
@@ -286,6 +287,24 @@ apply() {
                     log_warn "sudo may be required on macOS 14.2+: sudo bhkey apply"
                 fi
             fi
+            # Anti-Thesis #6: Verify mapping was actually applied (hidutil silent fail guard)
+            local actual
+            actual=$(hidutil property --matching "{\"VendorID\":$vid,\"ProductID\":$pid}" \
+                --get UserKeyMapping 2>/dev/null || true)
+            if ! echo "$actual" | /usr/bin/grep -q "MappingSrc"; then
+                log_warn "Mapping not confirmed for ${name:-$vid/$pid}. Retrying..."
+                sleep 1
+                hidutil property --matching "{\"VendorID\":$vid,\"ProductID\":$pid}" \
+                    --set "$mapping" >/dev/null 2>&1 || true
+                actual=$(hidutil property --matching "{\"VendorID\":$vid,\"ProductID\":$pid}" \
+                    --get UserKeyMapping 2>/dev/null || true)
+                if ! echo "$actual" | /usr/bin/grep -q "MappingSrc"; then
+                    log_error "Mapping verification failed after retry: ${name:-$vid/$pid}"
+                    if [[ $EUID -ne 0 ]]; then
+                        log_error "Try: sudo bhkey apply"
+                    fi
+                fi
+            fi
         done <<< "$devices"
     else
         log_info "Applying global mapping..."
@@ -295,6 +314,21 @@ apply() {
                 log_error "sudo may be required on macOS 14.2+: sudo bhkey apply"
             fi
             exit 1
+        fi
+        # Anti-Thesis #6: Verify global mapping was actually applied
+        local actual_global
+        actual_global=$(hidutil property --get UserKeyMapping 2>/dev/null || true)
+        if ! echo "$actual_global" | /usr/bin/grep -q "MappingSrc"; then
+            log_warn "Global mapping not confirmed. Retrying..."
+            sleep 1
+            hidutil property --set "$mapping" >/dev/null 2>&1 || true
+            actual_global=$(hidutil property --get UserKeyMapping 2>/dev/null || true)
+            if ! echo "$actual_global" | /usr/bin/grep -q "MappingSrc"; then
+                log_error "Global mapping verification failed after retry."
+                if [[ $EUID -ne 0 ]]; then
+                    log_error "Try: sudo bhkey apply"
+                fi
+            fi
         fi
     fi
 
@@ -338,12 +372,21 @@ PARGS
 $plist_args
     <key>RunAtLoad</key>
     <true/>
-    <key>WatchPaths</key>
-    <array>
-        <string>/dev</string>
-    </array>
-    <key>StartInterval</key>
-    <integer>5</integer>
+    <key>LaunchEvents</key>
+    <dict>
+        <key>com.apple.iokit.matching</key>
+        <dict>
+            <key>hid-keyboard-attach</key>
+            <dict>
+                <key>IOProviderClass</key>
+                <string>IOHIDDevice</string>
+                <key>PrimaryUsagePage</key>
+                <integer>1</integer>
+                <key>PrimaryUsage</key>
+                <integer>6</integer>
+            </dict>
+        </dict>
+    </dict>
 </dict>
 </plist>
 PLIST

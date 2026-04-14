@@ -7,6 +7,18 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [1.0.1] — 2026-04-14
+
+### Fixed
+- **D-005**: Replace deprecated `WatchPaths: /dev` + `StartInterval: 5` with `LaunchEvents IOKit` matching.
+  `WatchPaths` is race-prone on sleep/wake; `StartInterval < 10s` violates launchd ThrottleInterval and risks service suspension.
+  Now uses kernel-level `IOHIDDevice` (PrimaryUsagePage=1, PrimaryUsage=6) USB attach event — triggers only on actual keyboard plug-in.
+- **D-006**: Add post-apply mapping verification (`hidutil --get UserKeyMapping`) with one automatic retry.
+  `hidutil` exits 0 but silently skips mapping without sufficient privileges on macOS 14.2+.
+  If mapping not confirmed after retry, prints explicit `sudo bhkey apply` hint.
+
+---
+
 ## [1.0.0] — 2026-04-14
 
 ### Added
