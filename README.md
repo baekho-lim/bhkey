@@ -15,6 +15,20 @@ bhkey remaps modifier keys on external keyboards using Apple's native `hidutil` 
 
 It targets only your external keyboard (matched by VendorID+ProductID), so your built-in keyboard or Magic Keyboard is never touched.
 
+## Why bhkey over Karabiner-Elements?
+
+| | bhkey | Karabiner-Elements |
+|---|---|---|
+| Input latency | **0ms** (kernel-level hidutil) | ~1–2ms (userspace daemon) |
+| Installation | Home directory only, no sudo | System extension + reboot required |
+| macOS upgrades | Never breaks | Frequently requires reinstall |
+| CPU / memory | Zero (apply-and-forget) | Persistent background process |
+| Scope | Modifier key remapping | Full keyboard customization engine |
+
+**Use bhkey** if you just want to swap modifier keys on a Windows-layout keyboard with zero overhead.
+
+**Use Karabiner-Elements** if you need complex rules, layers, or non-modifier key remapping.
+
 ## Requirements
 
 - macOS 10.12 Sierra or later (`hidutil` was introduced in Sierra)
@@ -102,6 +116,14 @@ bhkey runs 5 checks before applying any mapping:
 ## Customization
 
 To change the key mappings, see [`docs/CUSTOMIZE.md`](docs/CUSTOMIZE.md) for the HID usage table, how to find your keyboard's VendorID/ProductID, and how to modify the mapping payload.
+
+## Roadmap
+
+- [x] **v1.0** — Shell CLI with hidutil and 5 anti-thesis guards
+- [ ] **v2.0** — Swift menu bar app with real-time mapping toggle and keyboard profile manager
+- [ ] **v3.0** — Per-keyboard profiles with automatic switching on connect/disconnect
+
+Contributions and ideas welcome — open a [Discussion](https://github.com/baekho-lim/bhkey/discussions) or [Issue](https://github.com/baekho-lim/bhkey/issues).
 
 ## License
 

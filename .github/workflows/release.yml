@@ -26,9 +26,23 @@ jobs:
           files: bhkey.sh
           generate_release_notes: true
 
-      - name: Print SHA256 for Homebrew formula
+      - name: Update Homebrew tap
+        env:
+          TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
         run: |
-          echo "=== Homebrew formula SHA256 ==="
-          SHA256=$(curl -sL "https://github.com/baekho-lim/bhkey/archive/refs/tags/${GITHUB_REF_NAME}.tar.gz" | shasum -a 256 | cut -d' ' -f1)
-          echo "sha256 \"${SHA256}\""
-          echo "url \"https://github.com/baekho-lim/bhkey/archive/refs/tags/${GITHUB_REF_NAME}.tar.gz\""
+          if [ -z "${TAP_TOKEN:-}" ]; then
+            echo "HOMEBREW_TAP_TOKEN not set — skipping tap auto-update"
+            exit 0
+          fi
+          VERSION="${GITHUB_REF_NAME}"
+          SHA256=$(curl -sL "https://github.com/baekho-lim/bhkey/archive/refs/tags/${VERSION}.tar.gz" | shasum -a 256 | cut -d' ' -f1)
+          git clone "https://x-access-token:${TAP_TOKEN}@github.com/baekho-lim/homebrew-bhkey.git" /tmp/tap
+          cd /tmp/tap
+          sed -i "s|url \".*\"|url \"https://github.com/baekho-lim/bhkey/archive/refs/tags/${VERSION}.tar.gz\"|" Formula/bhkey.rb
+          sed -i "s|sha256 \".*\"|sha256 \"${SHA256}\"|" Formula/bhkey.rb
+          sed -i "s|version \".*\"|version \"${VERSION#v}\"|" Formula/bhkey.rb
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git config user.name "github-actions[bot]"
+          git add Formula/bhkey.rb
+          git diff --cached --quiet || git commit -m "chore: bump bhkey to ${VERSION}"
+          git push

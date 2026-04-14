@@ -15,6 +15,20 @@ bhkey 使用 Apple 原生 `hidutil` 内核属性 API 重映射外接键盘的修
 
 通过 VendorID+ProductID 精准定位外接键盘，内置键盘和 Magic Keyboard 绝不受影响。
 
+## bhkey vs Karabiner-Elements
+
+| | bhkey | Karabiner-Elements |
+|---|---|---|
+| 输入延迟 | **0ms**（内核级 hidutil） | ~1–2ms（用户空间守护进程） |
+| 安装方式 | 仅限主目录，无需 sudo | 需安装系统扩展 + 重启 |
+| macOS 升级 | 永不损坏 | 升级后频繁需要重装 |
+| CPU / 内存 | 零消耗（应用即忘） | 常驻后台进程 |
+| 功能范围 | 修饰键重映射专用 | 完整键盘自定义引擎 |
+
+**选择 bhkey**：只需在 Windows 布局键盘上交换修饰键，追求零开销。
+
+**选择 Karabiner-Elements**：需要复杂规则、层级或非修饰键重映射。
+
 ## 系统要求
 
 - macOS 10.12 Sierra 及以上（`hidutil` 从 Sierra 开始引入）
@@ -102,6 +116,14 @@ bhkey 在应用映射前执行 5 项检查：
 ## 自定义映射
 
 如需更改按键映射，请参阅 [`docs/CUSTOMIZE.md`](docs/CUSTOMIZE.md)，其中包含 HID 用途表、如何查找键盘的 VendorID/ProductID，以及如何修改映射载荷。
+
+## 路线图
+
+- [x] **v1.0** — 基于 hidutil 的 Shell CLI + 5 项反冲突检测
+- [ ] **v2.0** — 支持实时映射切换的 Swift 菜单栏应用 + 键盘配置管理
+- [ ] **v3.0** — 基于键盘连接/断开检测的配置自动切换
+
+欢迎贡献与建议 — 打开 [Discussion](https://github.com/baekho-lim/bhkey/discussions) 或 [Issue](https://github.com/baekho-lim/bhkey/issues)。
 
 ## 许可证
 
