@@ -4,6 +4,11 @@ Zero-Latency Keyboard Remapper for macOS External Keyboards
 
 **Language**: English | [한국어](README.ko.md) | [中文](README.zh.md)
 
+[![CI](https://github.com/baekho-lim/bhkey/actions/workflows/ci.yml/badge.svg)](https://github.com/baekho-lim/bhkey/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![GitHub release](https://img.shields.io/github/v/release/baekho-lim/bhkey)](https://github.com/baekho-lim/bhkey/releases)
+![macOS](https://img.shields.io/badge/macOS-10.12%2B-blue)
+
 ## Description
 
 bhkey remaps modifier keys on external keyboards using Apple's native `hidutil` kernel property API — no virtual driver, no background daemon eating CPU. Mapping is applied at the kernel level with zero input latency. Unlike Karabiner-Elements, bhkey installs nothing into the system; all files live inside your home directory.
@@ -16,6 +21,29 @@ It targets only your external keyboard (matched by VendorID+ProductID), so your 
 - `bash`
 
 ## Installation
+
+### Option 1: One-line installer (recommended)
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/baekho-lim/bhkey/main/install.sh | bash
+```
+
+### Option 2: Homebrew
+
+```bash
+brew tap baekho-lim/bhkey
+brew install bhkey
+```
+
+### Option 3: Direct download
+
+```bash
+curl -L https://github.com/baekho-lim/bhkey/releases/latest/download/bhkey.sh -o bhkey.sh
+chmod +x bhkey.sh
+bash bhkey.sh apply
+```
+
+### Option 4: git clone
 
 ```bash
 git clone https://github.com/baekho-lim/bhkey.git

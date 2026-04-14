@@ -4,6 +4,11 @@ macOS 外接键盘零延迟按键重映射工具
 
 **Language**: [English](README.md) | [한국어](README.ko.md) | 中文
 
+[![CI](https://github.com/baekho-lim/bhkey/actions/workflows/ci.yml/badge.svg)](https://github.com/baekho-lim/bhkey/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![GitHub release](https://img.shields.io/github/v/release/baekho-lim/bhkey)](https://github.com/baekho-lim/bhkey/releases)
+![macOS](https://img.shields.io/badge/macOS-10.12%2B-blue)
+
 ## 简介
 
 bhkey 使用 Apple 原生 `hidutil` 内核属性 API 重映射外接键盘的修饰键，无需虚拟驱动，无后台进程占用 CPU。映射在内核层面生效，输入延迟为零。与 Karabiner-Elements 不同，bhkey 不向系统安装任何内容，所有文件均位于用户主目录内。
@@ -16,6 +21,29 @@ bhkey 使用 Apple 原生 `hidutil` 内核属性 API 重映射外接键盘的修
 - `bash`
 
 ## 安装
+
+### 方式一：一键安装（推荐）
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/baekho-lim/bhkey/main/install.sh | bash
+```
+
+### 方式二：Homebrew
+
+```bash
+brew tap baekho-lim/bhkey
+brew install bhkey
+```
+
+### 方式三：直接下载
+
+```bash
+curl -L https://github.com/baekho-lim/bhkey/releases/latest/download/bhkey.sh -o bhkey.sh
+chmod +x bhkey.sh
+bash bhkey.sh apply
+```
+
+### 方式四：git clone
 
 ```bash
 git clone https://github.com/baekho-lim/bhkey.git
