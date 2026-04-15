@@ -7,6 +7,15 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [1.0.2] — 2026-04-15
+
+### Fixed
+- **L-1**: Detect orphaned plist in `bhkey status`.
+  When bhkey.sh is moved or deleted after `apply`, the LaunchAgent holds a stale path and fails silently on keyboard attach.
+  Now extracts `ProgramArguments[1]` from the plist and warns if the path no longer exists, with a `bhkey apply` fix instruction.
+
+---
+
 ## [1.0.1] — 2026-04-14
 
 ### Fixed

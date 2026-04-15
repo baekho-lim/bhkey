@@ -1,5 +1,5 @@
 #!/bin/bash
-# bhkey v1.0.1: Zero-Latency Keyboard Remapper for macOS External Keyboards
+# bhkey v1.0.2: Zero-Latency Keyboard Remapper for macOS External Keyboards
 #
 # Anti-Thesis Guards:
 #   1. Detect macOS modifier key defaults conflicts
@@ -8,12 +8,13 @@
 #   4. Handle hidutil execution failure
 #   5. Handle LaunchAgent plist creation/load errors
 #   6. Verify mapping applied after hidutil --set (silent fail guard, macOS 14.2+)
+#   L-1. Detect orphaned plist (bhkey.sh path moved/deleted after apply)
 
 set -eu
 
 PLIST_NAME="com.bh.keymapping"
 PLIST_PATH="$HOME/Library/LaunchAgents/$PLIST_NAME.plist"
-BHKEY_VERSION="1.0.1"
+BHKEY_VERSION="1.0.2"
 NO_PROMPT=false
 
 # --- Colors ---
@@ -498,9 +499,19 @@ status() {
     if [[ -f "$PLIST_PATH" ]]; then
         echo "  plist: $PLIST_PATH (exists)"
         if launchctl print "gui/$(id -u)/$PLIST_NAME" >/dev/null 2>&1; then
-            echo "  status: registered (auto-applies on reboot)"
+            echo "  status: registered (auto-applies on keyboard attach)"
         else
             echo "  status: plist exists but not registered"
+        fi
+        # Anti-Thesis L-1: Detect orphaned plist (bhkey.sh path moved or deleted)
+        local plist_bhkey_path
+        plist_bhkey_path=$(/usr/libexec/PlistBuddy -c "Print :ProgramArguments:1" "$PLIST_PATH" 2>/dev/null || true)
+        if [[ -n "$plist_bhkey_path" && ! -f "$plist_bhkey_path" ]]; then
+            echo ""
+            log_warn "Orphaned plist detected!"
+            log_warn "  Registered path no longer exists: $plist_bhkey_path"
+            log_warn "  LaunchAgent will fail silently on keyboard attach."
+            log_warn "  Fix: run 'bhkey apply' from the current bhkey.sh location."
         fi
     else
         echo "  plist: none"
