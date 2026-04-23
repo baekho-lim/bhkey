@@ -1,5 +1,5 @@
 #!/bin/bash
-# bhkey v1.0.2: Zero-Latency Keyboard Remapper for macOS External Keyboards
+# bhkey v1.0.3: Zero-Latency Keyboard Remapper for macOS External Keyboards
 #
 # Anti-Thesis Guards:
 #   1. Detect macOS modifier key defaults conflicts
@@ -9,13 +9,21 @@
 #   5. Handle LaunchAgent plist creation/load errors
 #   6. Verify mapping applied after hidutil --set (silent fail guard, macOS 14.2+)
 #   L-1. Detect orphaned plist (bhkey.sh path moved/deleted after apply)
+#   D-007. Prevent LaunchAgent self-destruction on --no-prompt re-entry
+#          (apply --no-prompt must NOT rewrite plist or bootout/bootstrap its own service)
 
 set -eu
 
 PLIST_NAME="com.bh.keymapping"
 PLIST_PATH="$HOME/Library/LaunchAgents/$PLIST_NAME.plist"
-BHKEY_VERSION="1.0.2"
+LOG_DIR="$HOME/Library/Logs"
+LOG_FILE="$LOG_DIR/bhkey.log"
+LOG_MAX_BYTES=102400
+BHKEY_VERSION="1.0.3"
 NO_PROMPT=false
+# AGENT_MODE: true when invoked by launchd (via plist). Implies --no-prompt AND
+# skips plist/launchctl management to prevent self-destruction (D-007).
+AGENT_MODE=false
 
 # --- Colors ---
 RED='\033[0;31m'
@@ -24,9 +32,26 @@ YELLOW='\033[0;33m'
 CYAN='\033[0;36m'
 NC='\033[0m'
 
-log_info()  { echo -e "${GREEN}[bhkey]${NC} $1"; }
-log_warn()  { echo -e "${YELLOW}[bhkey WARN]${NC} $1"; }
-log_error() { echo -e "${RED}[bhkey ERROR]${NC} $1" >&2; }
+log_info()  { echo -e "${GREEN}[bhkey]${NC} $1"; log_to_file "INFO $1"; }
+log_warn()  { echo -e "${YELLOW}[bhkey WARN]${NC} $1"; log_to_file "WARN $1"; }
+log_error() { echo -e "${RED}[bhkey ERROR]${NC} $1" >&2; log_to_file "ERROR $1"; }
+
+log_to_file() {
+    # Best-effort file log; never fails the caller.
+    # Rotates when log exceeds LOG_MAX_BYTES (keeps one .1 backup).
+    { mkdir -p "$LOG_DIR" 2>/dev/null
+      if [[ -f "$LOG_FILE" ]]; then
+          local size
+          size=$(stat -f %z "$LOG_FILE" 2>/dev/null || echo 0)
+          if [[ "$size" -gt "$LOG_MAX_BYTES" ]]; then
+              mv -f "$LOG_FILE" "$LOG_FILE.1" 2>/dev/null || true
+          fi
+      fi
+      local mode="cli"
+      [[ "$NO_PROMPT" == true ]] && mode="agent"
+      printf '[%s][%s][pid=%d] %s\n' "$(date +'%Y-%m-%d %H:%M:%S')" "$mode" "$$" "$1" \
+          >> "$LOG_FILE" 2>/dev/null; } || true
+}
 
 # =============================================================
 # Anti-Thesis #1: Detect macOS system preferences modifier key conflicts
@@ -215,7 +240,10 @@ MAPPING
 # Apply
 # =============================================================
 apply() {
-    # Idempotency guard: skip if already mapped in non-interactive mode
+    # Idempotency guard: skip if already mapped in non-interactive mode.
+    # Silent path — no logging — because agent mode can fire many times per
+    # minute on composite HID keyboards (each interface = separate attach event),
+    # and logging every no-op would flood the file.
     if [[ "$NO_PROMPT" == true ]]; then
         local guard_devices
         guard_devices=$(detect_device)
@@ -230,10 +258,14 @@ apply() {
                 fi
             done <<< "$guard_devices"
             if [[ "$already_mapped" == true ]]; then
-                exit 0  # Already applied, exit silently
+                exit 0
             fi
         fi
     fi
+
+    # We are past the idempotency guard — real work is about to happen.
+    # Log the entry now so the log captures only meaningful invocations.
+    log_to_file "apply() started (NO_PROMPT=$NO_PROMPT AGENT_MODE=$AGENT_MODE)"
 
     log_info "bhkey v${BHKEY_VERSION} — Starting pre-flight checks..."
     echo ""
@@ -333,7 +365,23 @@ apply() {
         fi
     fi
 
-    # Anti-Thesis #5: Create LaunchAgent plist
+    # Anti-Thesis D-007: LaunchAgent self-destruction guard
+    #
+    # In --agent mode we were invoked by launchd (RunAtLoad or the IOKit
+    # keyboard-attach LaunchEvent). Calling `launchctl bootout` on our own
+    # service here races with the still-running child process, often leaving
+    # the plist on disk but the service UNREGISTERED. Subsequent unplug/replug
+    # of the keyboard then fires no LaunchEvent and the mapping is lost.
+    #
+    # In --agent mode our job is strictly to re-apply hidutil mappings to
+    # re-enumerated devices. The plist and launchd registration are managed
+    # ONLY on user-initiated `bhkey apply`.
+    if [[ "$AGENT_MODE" == true ]]; then
+        log_info "Mapping applied via LaunchAgent (plist untouched)."
+        return 0
+    fi
+
+    # Anti-Thesis #5: Create LaunchAgent plist (user-initiated apply only)
     local launch_agents_dir="$HOME/Library/LaunchAgents"
     if [[ ! -d "$launch_agents_dir" ]]; then
         mkdir -p "$launch_agents_dir" || {
@@ -342,7 +390,8 @@ apply() {
         }
     fi
 
-    # Unload existing plist first
+    # Unload existing plist first (safe here — we are the user-initiated caller,
+    # not a child of the LaunchAgent we are about to bootout)
     if [[ -f "$PLIST_PATH" ]]; then
         launchctl bootout "gui/$(id -u)/$PLIST_NAME" 2>/dev/null || true
     fi
@@ -357,7 +406,7 @@ apply() {
         <string>/bin/bash</string>
         <string>$bhkey_path</string>
         <string>apply</string>
-        <string>--no-prompt</string>
+        <string>--agent</string>
     </array>
 PARGS
 )
@@ -388,6 +437,8 @@ $plist_args
             </dict>
         </dict>
     </dict>
+    <key>StandardErrorPath</key>
+    <string>$LOG_DIR/bhkey-launchd.err</string>
 </dict>
 </plist>
 PLIST
@@ -405,9 +456,20 @@ PLIST
         launchctl kickstart -k "gui/$(id -u)/$PLIST_NAME" 2>/dev/null || true
     fi
 
+    # Verify registration persisted after bootstrap (Anti-Thesis D-007 post-check)
+    if ! launchctl print "gui/$(id -u)/$PLIST_NAME" >/dev/null 2>&1; then
+        log_warn "LaunchAgent registration did not persist. Retrying..."
+        sleep 1
+        launchctl bootstrap "gui/$(id -u)" "$PLIST_PATH" 2>/dev/null || true
+        if ! launchctl print "gui/$(id -u)/$PLIST_NAME" >/dev/null 2>&1; then
+            log_error "LaunchAgent registration failed. Keyboard replug will NOT auto-reapply mapping."
+            log_error "Check: launchctl print gui/$(id -u)/$PLIST_NAME"
+        fi
+    fi
+
     echo ""
     log_info "bhkey v${BHKEY_VERSION} applied successfully!"
-    log_info "Will auto-apply after reboot. (LaunchAgent: $PLIST_NAME)"
+    log_info "Will auto-apply on boot and keyboard attach. (LaunchAgent: $PLIST_NAME)"
 }
 
 # =============================================================
@@ -500,8 +562,17 @@ status() {
         echo "  plist: $PLIST_PATH (exists)"
         if launchctl print "gui/$(id -u)/$PLIST_NAME" >/dev/null 2>&1; then
             echo "  status: registered (auto-applies on keyboard attach)"
+            # Show recent run stats if available
+            local print_out runs last_exit
+            print_out=$(launchctl print "gui/$(id -u)/$PLIST_NAME" 2>/dev/null || true)
+            runs=$(echo "$print_out" | awk -F'= ' '/^[[:space:]]*runs =/ {print $2; exit}')
+            last_exit=$(echo "$print_out" | awk -F'= ' '/^[[:space:]]*last exit code =/ {print $2; exit}')
+            [[ -n "$runs" ]] && echo "  runs: $runs"
+            [[ -n "$last_exit" ]] && echo "  last exit: $last_exit"
         else
-            echo "  status: plist exists but not registered"
+            echo -e "  status: ${RED}plist exists but NOT registered${NC}"
+            echo "  → LaunchEvent will NOT fire on keyboard attach/replug."
+            echo "  → Fix: run 'bhkey apply' to re-register."
         fi
         # Anti-Thesis L-1: Detect orphaned plist (bhkey.sh path moved or deleted)
         local plist_bhkey_path
@@ -515,6 +586,16 @@ status() {
         fi
     else
         echo "  plist: none"
+    fi
+    echo ""
+
+    # Recent log (last 5 lines)
+    echo -e "${GREEN}[Recent Log]${NC}"
+    if [[ -f "$LOG_FILE" ]]; then
+        echo "  $LOG_FILE"
+        tail -n 5 "$LOG_FILE" 2>/dev/null | sed 's/^/    /'
+    else
+        echo "  (no log yet — run 'bhkey apply' to start logging)"
     fi
     echo ""
 
@@ -539,7 +620,16 @@ status() {
 # =============================================================
 case "${1:-}" in
     apply)
-        [[ "${2:-}" == "--no-prompt" ]] && NO_PROMPT=true
+        # Parse flags in any order after "apply"
+        shift
+        while [[ $# -gt 0 ]]; do
+            case "$1" in
+                --no-prompt) NO_PROMPT=true ;;
+                --agent)     AGENT_MODE=true; NO_PROMPT=true ;;
+                *) log_warn "Unknown apply flag: $1" ;;
+            esac
+            shift
+        done
         apply
         ;;
     reset)  reset ;;
@@ -550,9 +640,11 @@ case "${1:-}" in
         echo ""
         echo "Usage: bhkey {apply|reset|status|version}"
         echo ""
-        echo "  apply   — Apply key mapping (with anti-thesis checks)"
-        echo "  reset   — Reset all mappings"
-        echo "  status  — Show current status"
-        echo "  version — Print version"
+        echo "  apply          — Apply key mapping (with anti-thesis checks)"
+        echo "  apply --no-prompt  — Non-interactive apply (skip confirmations)"
+        echo "  apply --agent      — Internal: invoked by LaunchAgent (no plist/launchctl management)"
+        echo "  reset          — Reset all mappings"
+        echo "  status         — Show current status"
+        echo "  version        — Print version"
         ;;
 esac
